@@ -1,0 +1,70 @@
+{
+  "project_info": {
+    "project_number": "483552581279",
+    "project_id": "gnala-cosmetic",
+    "storage_bucket": "gnala-cosmetic.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:483552581279:android:7958ff90c01bc285bdb4aa",
+        "android_client_info": {
+          "package_name": "com.example.gnala"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnuhFsXzhdvYD2x8AC0E66sDZISM5IqVE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:483552581279:android:5547cd5ba1348550bdb4aa",
+        "android_client_info": {
+          "package_name": "com.example.gnala_cosmetic"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnuhFsXzhdvYD2x8AC0E66sDZISM5IqVE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

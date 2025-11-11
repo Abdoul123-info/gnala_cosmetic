@@ -1,0 +1,45 @@
+﻿rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Règles pour les images de produits - SEULS LES ADMINS PEUVENT UPLOADER
+    match /products/{productId}/{fileName} {
+      // Lecture : Tous les utilisateurs authentifiés peuvent lire les images de produits
+      allow read: if request.auth != null;
+      
+      // Upload/Modification/Suppression : SEULEMENT LES ADMINS
+      allow write: if request.auth != null && 
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+    
+    // Règles pour les images de profil utilisateur
+    match /users/{userId}/profile/{fileName} {
+      // Lecture : Tous les utilisateurs authentifiés peuvent lire les images de profil
+      allow read: if request.auth != null;
+      
+      // Upload/Modification : Seulement le propriétaire du profil
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Règles pour les images de catégories - SEULS LES ADMINS
+    match /categories/{categoryId}/{fileName} {
+      // Lecture : Tous les utilisateurs authentifiés peuvent lire les images de catégories
+      allow read: if request.auth != null;
+      
+      // Upload/Modification/Suppression : SEULEMENT LES ADMINS
+      allow write: if request.auth != null && 
+        firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+    
+    // Règles pour les images temporaires (uploads en cours)
+    match /temp/{userId}/{fileName} {
+      // Lecture/Écriture : Seulement le propriétaire pour les fichiers temporaires
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Règles par défaut - refuser tout accès non spécifié
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
