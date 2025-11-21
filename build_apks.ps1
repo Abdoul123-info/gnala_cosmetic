@@ -29,12 +29,12 @@ if (-not (Test-Path "releases")) {
 # Sauvegarder la configuration originale
 $buildGradle = Get-Content "android/app/build.gradle.kts" -Raw
 
-# Build APK V7-V8 (API 24-27)
-Write-Host "`n🔨 Build APK V7-V8 (Android 7.0 - 8.1, API 24-27)..." -ForegroundColor Green
-Write-Host "   Configuration: minSdk=24, targetSdk=27" -ForegroundColor Gray
+# Build APK V7-V8 (API 24+, target 33+)
+Write-Host "`n🔨 Build APK V7-V8 (Android 7.0+, API 24+, target 33+)..." -ForegroundColor Green
+Write-Host "   Configuration: minSdk=24, targetSdk=33 (minimum Google Play)" -ForegroundColor Gray
 
 # Modifier temporairement le build.gradle.kts pour V7-V8
-$buildGradleV7V8 = $buildGradle -replace 'minSdk = 24\s*//.*', 'minSdk = 24  // Android 7.0 (Nougat) - V7-V8' -replace 'targetSdk = 35\s*//.*', 'targetSdk = 27  // Android 8.1 (Oreo) - V7-V8'
+$buildGradleV7V8 = $buildGradle -replace 'minSdk = 24\s*//.*', 'minSdk = 24  // Android 7.0 (Nougat) - V7-V8' -replace 'targetSdk = 35\s*//.*', 'targetSdk = 33  // Android 13 (minimum Google Play) - V7-V8'
 $buildGradleV7V8 | Set-Content "android/app/build.gradle.kts"
 
 # Build release V7-V8

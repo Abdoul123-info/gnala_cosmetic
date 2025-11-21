@@ -67,14 +67,16 @@ jobs:
       - name: Create releases directory
         run: mkdir -p releases
 
-      - name: Build APK V7-V8 (API 24-27)
+      - name: Build APK V7-V8 (API 24+)
         id: build_v7v8
         continue-on-error: true
         run: |
-          echo "🔨 Building APK V7-V8 (Android 7.0-8.1, API 24-27)..."
+          echo "🔨 Building APK V7-V8 (Android 7.0+, API 24+, target 33+)..."
           # Modifier build.gradle.kts pour V7-V8
+          # minSdk = 24 pour supporter Android 7.0+
+          # targetSdk = 33 (minimum requis par Google Play) pour compatibilité
           sed -i 's/minSdk = 24.*/minSdk = 24  \/\/ Android 7.0 (Nougat) - V7-V8/' android/app/build.gradle.kts
-          sed -i 's/targetSdk = 35.*/targetSdk = 27  \/\/ Android 8.1 (Oreo) - V7-V8/' android/app/build.gradle.kts
+          sed -i 's/targetSdk = 35.*/targetSdk = 33  \/\/ Android 13 (minimum Google Play) - V7-V8/' android/app/build.gradle.kts
           flutter build apk --release --no-tree-shake-icons || exit 1
           cp build/app/outputs/flutter-apk/app-release.apk releases/gnala-cosmetic-v7v8-release.apk
           echo "✅ APK V7-V8 built successfully"
@@ -87,6 +89,8 @@ jobs:
           # Restaurer build.gradle.kts d'abord
           git checkout android/app/build.gradle.kts || true
           # Modifier build.gradle.kts pour V8-V15
+          # minSdk = 26 pour supporter Android 8.0+
+          # targetSdk = 35 pour Android 15 (dernière version)
           sed -i 's/minSdk = 24.*/minSdk = 26  \/\/ Android 8.0 (Oreo) - V8-V15/' android/app/build.gradle.kts
           sed -i 's/targetSdk = 35.*/targetSdk = 35  \/\/ Android 15 - V8-V15/' android/app/build.gradle.kts
           flutter clean

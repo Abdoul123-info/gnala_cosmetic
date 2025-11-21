@@ -7,9 +7,10 @@ Ce dossier contient les versions APK de l'application Gnala Cosmetic.
 L'application est disponible en deux versions pour différentes versions Android :
 
 ### APK V7-V8
-- **Support** : Android 7.0 (API 24) à Android 8.1 (API 27)
+- **Support minimum** : Android 7.0 (API 24)
+- **Target SDK** : Android 13 (API 33) - requis par Google Play
 - **Fichier** : `gnala-cosmetic-v7v8-release.apk`
-- **Compatible avec** : Android Nougat (7.0, 7.1) et Android Oreo (8.0, 8.1)
+- **Compatible avec** : Android 7.0+ (Nougat, Oreo, Pie, Android 10, 11, 12, 13+)
 
 ### APK V8-V15
 - **Support** : Android 8.0 (API 26) à Android 15 (API 35)
@@ -40,8 +41,8 @@ Ce script va :
 
 #### Build APK V7-V8
 1. Modifier `android/app/build.gradle.kts` :
-   - `minSdk = 24`
-   - `targetSdk = 27`
+   - `minSdk = 24` (Android 7.0 minimum)
+   - `targetSdk = 33` (Android 13 - minimum requis par Google Play)
 2. Builder : `flutter build apk --release`
 3. Copier : `build/app/outputs/flutter-apk/app-release.apk` → `releases/gnala-cosmetic-v7v8-release.apk`
 
