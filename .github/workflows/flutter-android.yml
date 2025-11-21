@@ -1,0 +1,81 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Cache Flutter
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pub-
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.7"
+
+      - name: Flutter doctor
+        run: |
+          flutter --version
+          flutter doctor -v
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Print Android/Gradle versions
+        run: |
+          cd android
+          ./gradlew -v || true
+          cat gradle/wrapper/gradle-wrapper.properties || true
+          cat build.gradle.kts || true
+          cat app/build.gradle.kts || true
+          cd ..
+
+      - name: Build APK release (split ABIs)
+        id: build_release
+        continue-on-error: true
+        run: |
+          flutter build apk --release --split-per-abi --no-tree-shake-icons --android-skip-build-dependency-validation -v
+
+      - name: Build APK debug (fallback if release fails)
+        if: steps.build_release.outcome == 'failure'
+        run: |
+          flutter build apk --debug --split-per-abi -v
+
+      - name: Upload APK artifacts (release or debug)
+        uses: actions/upload-artifact@v4
+        with:
+          name: gnala-apk
+          path: build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error
+
+

@@ -1,0 +1,77 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Règles pour la collection des utilisateurs
+    match /users/{userId} {
+      // Un utilisateur peut lire et écrire son propre document
+      // Permet la création lors de l'inscription (write inclut create)
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // Les admins peuvent lire tous les documents utilisateurs
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+      
+      // Règles pour la sous-collection des favoris
+      match /favorites/{favoriteId} {
+        // Un utilisateur peut lire et écrire ses propres favoris
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Collection séparée pour les numéros de téléphone (sécurité améliorée)
+    // Ne contient que phoneDigits et uid - pas de données personnelles
+    match /phone_numbers/{phoneDigits} {
+      // Permettre la lecture SANS authentification pour vérification d'unicité lors de l'inscription
+      // (Les données ne sont pas sensibles : seulement numéro et UID)
+      allow read: if true;
+      
+      // Permettre la création seulement lors de l'inscription (par le propriétaire)
+      allow create: if request.auth != null && 
+        request.resource.data.uid == request.auth.uid &&
+        request.resource.data.phoneDigits == phoneDigits;
+      
+      // Permettre la mise à jour seulement si c'est son propre numéro
+      allow update: if request.auth != null && 
+        resource.data.uid == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid;
+      
+      // Permettre la suppression seulement si c'est son propre numéro
+      allow delete: if request.auth != null && 
+        resource.data.uid == request.auth.uid;
+    }
+    
+    // Règles pour la collection des produits
+    match /products/{productId} {
+      // Tous les utilisateurs authentifiés peuvent lire les produits
+      allow read: if request.auth != null;
+      
+      // Seuls les admins peuvent créer, modifier ou supprimer des produits
+      allow write: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+    
+    // Règles pour la collection des commandes (optionnel pour l'avenir)
+    match /orders/{orderId} {
+      // Un utilisateur peut lire et écrire ses propres commandes
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+      
+      // Les admins peuvent lire toutes les commandes
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+    
+    // Règles pour la collection des paniers (optionnel pour l'avenir)
+    match /carts/{cartId} {
+      // Un utilisateur peut lire et écrire son propre panier
+      allow read, write: if request.auth != null && 
+        resource.data.userId == request.auth.uid;
+    }
+    
+    // Règles par défaut - refuser tout accès non spécifié
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
