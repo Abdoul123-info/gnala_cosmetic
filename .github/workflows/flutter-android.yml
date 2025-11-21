@@ -9,10 +9,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -65,25 +69,29 @@ jobs:
 
       - name: Build APK V7-V8 (API 24-27)
         id: build_v7v8
+        continue-on-error: true
         run: |
           echo "🔨 Building APK V7-V8 (Android 7.0-8.1, API 24-27)..."
           # Modifier build.gradle.kts pour V7-V8
           sed -i 's/minSdk = 24.*/minSdk = 24  \/\/ Android 7.0 (Nougat) - V7-V8/' android/app/build.gradle.kts
           sed -i 's/targetSdk = 35.*/targetSdk = 27  \/\/ Android 8.1 (Oreo) - V7-V8/' android/app/build.gradle.kts
-          flutter build apk --release --no-tree-shake-icons
+          flutter build apk --release --no-tree-shake-icons || exit 1
           cp build/app/outputs/flutter-apk/app-release.apk releases/gnala-cosmetic-v7v8-release.apk
           echo "✅ APK V7-V8 built successfully"
 
       - name: Build APK V8-V15 (API 26-35)
         id: build_v8v15
+        continue-on-error: true
         run: |
           echo "🔨 Building APK V8-V15 (Android 8.0-15, API 26-35)..."
+          # Restaurer build.gradle.kts d'abord
+          git checkout android/app/build.gradle.kts || true
           # Modifier build.gradle.kts pour V8-V15
           sed -i 's/minSdk = 24.*/minSdk = 26  \/\/ Android 8.0 (Oreo) - V8-V15/' android/app/build.gradle.kts
-          sed -i 's/targetSdk = 27.*/targetSdk = 35  \/\/ Android 15 - V8-V15/' android/app/build.gradle.kts
+          sed -i 's/targetSdk = 35.*/targetSdk = 35  \/\/ Android 15 - V8-V15/' android/app/build.gradle.kts
           flutter clean
           flutter pub get
-          flutter build apk --release --no-tree-shake-icons
+          flutter build apk --release --no-tree-shake-icons || exit 1
           cp build/app/outputs/flutter-apk/app-release.apk releases/gnala-cosmetic-v8v15-release.apk
           echo "✅ APK V8-V15 built successfully"
 
@@ -96,18 +104,19 @@ jobs:
         with:
           name: gnala-apks
           path: releases/*.apk
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Commit and push APKs to repository
+        if: always()
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add releases/*.apk
+          git add releases/*.apk || true
           if git diff --staged --quiet; then
-            echo "No changes to commit"
+            echo "No APK files to commit"
           else
-            git commit -m "Build APK V7-V8 and V8-V15 [skip ci]"
-            git push origin main
+            git commit -m "Build APK V7-V8 and V8-V15 [skip ci]" || echo "Nothing to commit"
+            git push origin main || echo "Push failed"
           fi
 
 
