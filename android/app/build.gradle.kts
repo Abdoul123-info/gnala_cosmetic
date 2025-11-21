@@ -26,8 +26,10 @@ android {
         applicationId = "com.example.gnala_cosmetic"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // Configuration par défaut : support Android 7.0+ (API 24+) jusqu'à Android 15 (API 35)
+        // Pour builder des versions spécifiques, utilisez le script build_apks.ps1
+        minSdk = 24  // Android 7.0 (Nougat) - minimum pour V7-V8
+        targetSdk = 35  // Android 15 - maximum pour V8-V15
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
