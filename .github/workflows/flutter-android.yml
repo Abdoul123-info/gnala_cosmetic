@@ -60,22 +60,54 @@ jobs:
           cat app/build.gradle.kts || true
           cd ..
 
-      - name: Build APK release (split ABIs)
-        id: build_release
-        continue-on-error: true
-        run: |
-          flutter build apk --release --split-per-abi --no-tree-shake-icons --android-skip-build-dependency-validation -v
+      - name: Create releases directory
+        run: mkdir -p releases
 
-      - name: Build APK debug (fallback if release fails)
-        if: steps.build_release.outcome == 'failure'
+      - name: Build APK V7-V8 (API 24-27)
+        id: build_v7v8
         run: |
-          flutter build apk --debug --split-per-abi -v
+          echo "🔨 Building APK V7-V8 (Android 7.0-8.1, API 24-27)..."
+          # Modifier build.gradle.kts pour V7-V8
+          sed -i 's/minSdk = 24.*/minSdk = 24  \/\/ Android 7.0 (Nougat) - V7-V8/' android/app/build.gradle.kts
+          sed -i 's/targetSdk = 35.*/targetSdk = 27  \/\/ Android 8.1 (Oreo) - V7-V8/' android/app/build.gradle.kts
+          flutter build apk --release --no-tree-shake-icons
+          cp build/app/outputs/flutter-apk/app-release.apk releases/gnala-cosmetic-v7v8-release.apk
+          echo "✅ APK V7-V8 built successfully"
 
-      - name: Upload APK artifacts (release or debug)
+      - name: Build APK V8-V15 (API 26-35)
+        id: build_v8v15
+        run: |
+          echo "🔨 Building APK V8-V15 (Android 8.0-15, API 26-35)..."
+          # Modifier build.gradle.kts pour V8-V15
+          sed -i 's/minSdk = 24.*/minSdk = 26  \/\/ Android 8.0 (Oreo) - V8-V15/' android/app/build.gradle.kts
+          sed -i 's/targetSdk = 27.*/targetSdk = 35  \/\/ Android 15 - V8-V15/' android/app/build.gradle.kts
+          flutter clean
+          flutter pub get
+          flutter build apk --release --no-tree-shake-icons
+          cp build/app/outputs/flutter-apk/app-release.apk releases/gnala-cosmetic-v8v15-release.apk
+          echo "✅ APK V8-V15 built successfully"
+
+      - name: Restore build.gradle.kts
+        run: |
+          git checkout android/app/build.gradle.kts || true
+
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: gnala-apk
-          path: build/app/outputs/flutter-apk/*.apk
+          name: gnala-apks
+          path: releases/*.apk
           if-no-files-found: error
+
+      - name: Commit and push APKs to repository
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add releases/*.apk
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Build APK V7-V8 and V8-V15 [skip ci]"
+            git push origin main
+          fi
 
 
