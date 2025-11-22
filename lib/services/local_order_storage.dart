@@ -37,13 +37,18 @@ class LocalOrderStorage {
   }
 
   /// Sauvegarde les commandes localement
-  static Future<void> saveOrders(List<OrderHistoryEntry> orders) async {
+  /// [forceSave] : si true, sauvegarde même si l'historique a été vidé (pour les nouvelles commandes uniquement)
+  static Future<void> saveOrders(List<OrderHistoryEntry> orders, {bool forceSave = false}) async {
     try {
-      // Vérifier si l'historique a été vidé - ne pas sauvegarder si c'est le cas
-      final isCleared = await isHistoryCleared();
-      if (isCleared) {
-        print('🚫 Historique vidé - sauvegarde des commandes annulée');
-        return;
+      // Vérifier si l'historique a été vidé - ne pas sauvegarder si c'est le cas (sauf si forceSave = true)
+      if (!forceSave) {
+        final isCleared = await isHistoryCleared();
+        if (isCleared) {
+          print('🚫 Historique vidé - sauvegarde des commandes annulée');
+          return;
+        }
+      } else {
+        print('💾 Sauvegarde forcée (nouvelle commande) - ignore le flag de suppression');
       }
       
       final prefs = await SharedPreferences.getInstance();

@@ -112,13 +112,22 @@ class OrderService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         print('Commande envoyée avec succès à order_site');
         
-        // Réinitialiser le flag de suppression d'historique car une nouvelle commande a été passée
-        await LocalOrderStorage.resetHistoryClearedFlag();
-        
         // Sauvegarder la nouvelle commande dans le cache local
+        // Ne pas réinitialiser le flag - si l'historique a été supprimé, on ajoute seulement la nouvelle commande
         try {
+          // Récupérer l'ID de la commande depuis la réponse du serveur
+          String orderId = DateTime.now().millisecondsSinceEpoch.toString();
+          try {
+            final responseBody = jsonDecode(response.body);
+            if (responseBody is Map<String, dynamic>) {
+              orderId = responseBody['orderId']?.toString() ?? orderId;
+            }
+          } catch (e) {
+            print('⚠️ Erreur parsing réponse serveur pour orderId: $e');
+          }
+          
           final newOrder = OrderHistoryEntry(
-            id: orderData['userId'] as String? ?? DateTime.now().millisecondsSinceEpoch.toString(),
+            id: orderId,
             status: 'pending',
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
@@ -136,10 +145,12 @@ class OrderService {
             )).toList(),
           );
           
-          // Charger les commandes existantes et ajouter la nouvelle
+          // Charger les commandes existantes (sera vide si l'historique a été supprimé)
           final existingOrders = await LocalOrderStorage.loadOrders();
           existingOrders.insert(0, newOrder); // Ajouter en premier
-          await LocalOrderStorage.saveOrders(existingOrders);
+          
+          // Sauvegarder en forçant l'écriture même si le flag est activé (pour la nouvelle commande uniquement)
+          await LocalOrderStorage.saveOrders(existingOrders, forceSave: true);
           print('💾 Nouvelle commande sauvegardée dans le cache local');
         } catch (e) {
           print('⚠️ Erreur sauvegarde locale nouvelle commande: $e');
