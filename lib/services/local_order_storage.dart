@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/order_history.dart';
 
 /// Service pour stocker les commandes localement
@@ -9,30 +11,41 @@ class LocalOrderStorage {
   static const String _ordersKeyPrefix = 'cached_orders_';
   static const String _historyClearedKeyPrefix = 'history_cleared_';
 
-  /// Récupère la clé de stockage pour l'utilisateur actuel
-  static String _getStorageKey() {
-    final user = FirebaseAuth.instance.currentUser;
+  /// Obtient l'utilisateur courant ou attend sa disponibilité
+  static Future<User> _requireUser() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) return user;
+
+    try {
+      user = await FirebaseAuth.instance
+          .authStateChanges()
+          .firstWhere((u) => u != null)
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // ignoré - on testera après
+    }
+
     if (user == null) {
       throw Exception('Utilisateur non connecté');
     }
+    return user;
+  }
+
+  /// Récupère la clé de stockage pour l'utilisateur actuel
+  static Future<String> _getStorageKey() async {
+    final user = await _requireUser();
     return '$_ordersKeyPrefix${user.uid}';
   }
 
   /// Récupère la clé pour le flag de suppression d'historique
-  static String _getHistoryClearedKey() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw Exception('Utilisateur non connecté');
-    }
+  static Future<String> _getHistoryClearedKey() async {
+    final user = await _requireUser();
     return '$_historyClearedKeyPrefix${user.uid}';
   }
 
   /// Récupère la clé pour le timestamp de suppression d'historique (plus fiable)
-  static String _getHistoryClearedTimestampKey() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw Exception('Utilisateur non connecté');
-    }
+  static Future<String> _getHistoryClearedTimestampKey() async {
+    final user = await _requireUser();
     return '${_historyClearedKeyPrefix}timestamp_${user.uid}';
   }
 
@@ -52,7 +65,7 @@ class LocalOrderStorage {
       }
       
       final prefs = await SharedPreferences.getInstance();
-      final key = _getStorageKey();
+      final key = await _getStorageKey();
       
       // Convertir les commandes en JSON
       final ordersJson = orders.map((order) => {
@@ -87,7 +100,7 @@ class LocalOrderStorage {
   static Future<List<OrderHistoryEntry>> loadOrders() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key = _getStorageKey();
+      final key = await _getStorageKey();
       
       final jsonString = prefs.getString(key);
       if (jsonString == null || jsonString.isEmpty) {
@@ -161,8 +174,8 @@ class LocalOrderStorage {
   static Future<void> clearCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final key = _getStorageKey();
-      final clearedKey = _getHistoryClearedKey();
+      final key = await _getStorageKey();
+      final clearedKey = await _getHistoryClearedKey();
       
       print('🗑️ Début suppression cache: clé=$key, flagKey=$clearedKey');
       
@@ -176,7 +189,7 @@ class LocalOrderStorage {
       
       // Sauvegarder le timestamp (nouvelle méthode plus fiable)
       final timestamp = DateTime.now().toIso8601String();
-      final timestampKey = _getHistoryClearedTimestampKey();
+      final timestampKey = await _getHistoryClearedTimestampKey();
       final savedTimestamp = await prefs.setString(timestampKey, timestamp);
       print('🔍 Tentative sauvegarde flag timestamp: $savedTimestamp, valeur=$timestamp');
       
@@ -212,6 +225,20 @@ class LocalOrderStorage {
       
       print('🗑️ Cache local supprimé et flag de suppression activé');
       print('🔍 Flags sauvegardés: bool=$savedBool, timestamp=$savedTimestamp');
+
+      // Propager l'information côté Firestore pour synchroniser tous les appareils
+      try {
+        final user = await _requireUser();
+        if (user.uid.isNotEmpty) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'historyCleared': true,
+            'historyClearedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          print('☁️ Firestore mis à jour: historyCleared=true (serveur)');
+        }
+      } catch (cloudError) {
+        print('⚠️ Impossible de mettre à jour Firestore pour historyCleared: $cloudError');
+      }
     } catch (e) {
       print('❌ Erreur suppression cache: $e');
       rethrow; // Relancer l'erreur pour que l'utilisateur soit informé
@@ -222,8 +249,8 @@ class LocalOrderStorage {
   static Future<bool> isHistoryCleared() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final clearedKey = _getHistoryClearedKey();
-      final timestampKey = _getHistoryClearedTimestampKey();
+      final clearedKey = await _getHistoryClearedKey();
+      final timestampKey = await _getHistoryClearedTimestampKey();
       
       // Vérifier le booléen (ancienne méthode)
       final isClearedBool = prefs.getBool(clearedKey) ?? false;
@@ -245,12 +272,26 @@ class LocalOrderStorage {
     }
   }
 
+  /// Retourne la date à laquelle l'historique a été vidé, si disponible
+  static Future<DateTime?> getHistoryClearedTimestamp() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final timestampKey = await _getHistoryClearedTimestampKey();
+      final timestamp = prefs.getString(timestampKey);
+      if (timestamp == null || timestamp.isEmpty) return null;
+      return DateTime.tryParse(timestamp);
+    } catch (e) {
+      print('❌ Erreur récupération timestamp suppression: $e');
+      return null;
+    }
+  }
+
   /// Réinitialise le flag de suppression (appelé quand une nouvelle commande est passée)
   static Future<void> resetHistoryClearedFlag() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final clearedKey = _getHistoryClearedKey();
-      final timestampKey = _getHistoryClearedTimestampKey();
+      final clearedKey = await _getHistoryClearedKey();
+      final timestampKey = await _getHistoryClearedTimestampKey();
       
       // Supprimer les deux flags
       await prefs.remove(clearedKey);

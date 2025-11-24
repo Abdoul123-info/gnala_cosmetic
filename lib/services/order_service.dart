@@ -178,12 +178,12 @@ class OrderService {
 
       // Vérifier si l'utilisateur a choisi de vider l'historique
       final isHistoryCleared = await LocalOrderStorage.isHistoryCleared();
+      final clearedTimestamp = await LocalOrderStorage.getHistoryClearedTimestamp();
       print('🔍 Vérification flag historique vidé: $isHistoryCleared');
-      if (isHistoryCleared) {
-        print('📦 Historique vidé par l\'utilisateur - pas de récupération depuis le serveur');
-        return []; // Retourner une liste vide si l'historique a été vidé
+      if (clearedTimestamp != null) {
+        print('🕒 Historique vidé à: ${clearedTimestamp.toIso8601String()}');
       }
-      print('✅ Flag historique non vidé - récupération depuis le serveur autorisée');
+      print('✅ Récupération depuis le serveur autorisée (les commandes anciennes seront filtrées)');
 
       String? idToken;
       try {
@@ -244,26 +244,44 @@ class OrderService {
                 .toList();
             
             print('✅ ${serverOrders.length} commande(s) chargée(s) depuis le serveur');
-            
-            // Vérifier à nouveau si l'historique a été vidé (au cas où il aurait été vidé pendant la requête)
-            final isHistoryCleared = await LocalOrderStorage.isHistoryCleared();
-            if (isHistoryCleared) {
-              print('📦 Historique vidé par l\'utilisateur - pas de sauvegarde des commandes du serveur');
-              return []; // Retourner une liste vide si l'historique a été vidé
+
+            // Filtrer côté client les commandes antérieures au vidage (sécurité supplémentaire)
+            List<OrderHistoryEntry> filteredServerOrders = serverOrders;
+            if (clearedTimestamp != null) {
+              filteredServerOrders = serverOrders.where((order) {
+                final created = order.createdAt ?? order.updatedAt;
+                if (created == null) return false;
+                return created.isAfter(clearedTimestamp);
+              }).toList();
+              if (filteredServerOrders.length != serverOrders.length) {
+                print('🚫 ${serverOrders.length - filteredServerOrders.length} commande(s) ignorée(s) car antérieures au vidage');
+              }
             }
             
-            // Sauvegarder les commandes du serveur dans le cache local
-            await LocalOrderStorage.saveOrders(serverOrders);
+            // Vérifier à nouveau si l'historique a été vidé pendant la requête
+            final effectiveHistoryCleared = await LocalOrderStorage.isHistoryCleared();
+            if (effectiveHistoryCleared) {
+              print('📦 Historique vidé pendant la requête - sauvegarde forcée uniquement des commandes récentes');
+            }
+            
+            // Sauvegarder les commandes du serveur dans le cache local (forcer si vidage actif)
+            await LocalOrderStorage.saveOrders(
+              filteredServerOrders,
+              forceSave: effectiveHistoryCleared,
+            );
             
             // Charger les commandes du cache local
             final localOrders = await LocalOrderStorage.loadOrders();
             
             // Fusionner les commandes du serveur avec celles du cache
             // Les commandes supprimées du serveur resteront dans le cache
-            final mergedOrders = LocalOrderStorage.mergeOrders(serverOrders, localOrders);
+            final mergedOrders = LocalOrderStorage.mergeOrders(filteredServerOrders, localOrders);
             
             // Sauvegarder la liste fusionnée pour la prochaine fois
-            await LocalOrderStorage.saveOrders(mergedOrders);
+            await LocalOrderStorage.saveOrders(
+              mergedOrders,
+              forceSave: effectiveHistoryCleared,
+            );
             
             return mergedOrders;
           }
@@ -290,13 +308,7 @@ class OrderService {
     } catch (e) {
       print('❌ Erreur fetchOrderHistory: $e');
       
-      // Vérifier si l'historique a été vidé avant de charger depuis le cache
       final isHistoryCleared = await LocalOrderStorage.isHistoryCleared();
-      if (isHistoryCleared) {
-        print('📦 Historique vidé par l\'utilisateur - pas de chargement depuis le cache');
-        return []; // Retourner une liste vide si l'historique a été vidé
-      }
-      
       // En cas d'erreur, essayer de charger depuis le cache local
       print('🔄 Tentative de chargement depuis le cache local...');
       try {
@@ -304,6 +316,10 @@ class OrderService {
         if (localOrders.isNotEmpty) {
           print('✅ ${localOrders.length} commande(s) chargée(s) depuis le cache local (mode hors ligne)');
           return localOrders;
+        }
+        if (isHistoryCleared) {
+          print('📦 Historique vidé et cache vide → retour d\'une liste vide');
+          return [];
         }
       } catch (cacheError) {
         print('❌ Erreur chargement cache: $cacheError');
